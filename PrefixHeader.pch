@@ -305,3 +305,207 @@ return self; \
 #define TOCK NSLog(@"Time:%f", -[startTime timeIntervalSinceNow]);
 
 
+
+/**
+ *  redefine NSLog
+ */
+#define __NSLog(s, ...) do { \
+            NSString *logString = [NSString stringWithFormat:@"[%@(%d)] %@",[[NSString stringWithUTF8String:__FILE__] lastPathComponent],__LINE__,[NSString stringWithFormat:(s), ##__VA_ARGS__]]; \
+            NSLog(@"%@", logString); \
+            [YSCLogManager saveLog:logString]; \
+        } while (0)
+#define NSLog(...) __NSLog(__VA_ARGS__)
+
+
+/**
+ *  check object empty
+ */
+#define OBJECT_IS_EMPTY(_object) (_object == nil \
+|| [_object isKindOfClass:[NSNull class]] \
+|| ([_object respondsToSelector:@selector(length)] && [(NSData *)_object length] == 0) \
+|| ([_object respondsToSelector:@selector(count)]  && [(NSArray *)_object count] == 0))
+#define OBJECT_ISNOT_EMPTY(_object) (NO == OBJECT_IS_EMPTY(_object))
+#define RETURN_WHEN_OBJECT_IS_EMPTY(_object)        if (OBJECT_IS_EMPTY(_object)) { return ;    }
+#define RETURN_NIL_WHEN_OBJECT_IS_EMPTY(_object)    if (OBJECT_IS_EMPTY(_object)) { return nil; }
+#define RETURN_EMPTY_WHEN_OBJECT_IS_EMPTY(_object)  if (OBJECT_IS_EMPTY(_object)) { return @""; }
+#define RETURN_YES_WHEN_OBJECT_IS_EMPTY(_object)    if (OBJECT_IS_EMPTY(_object)) { return YES; }
+#define RETURN_NO_WHEN_OBJECT_IS_EMPTY(_object)     if (OBJECT_IS_EMPTY(_object)) { return NO; }
+#define RETURN_ZERO_WHEN_OBJECT_IS_EMPTY(_object)   if (OBJECT_IS_EMPTY(_object)) { return 0; }
+
+// trim string
+#define TRIM_STRING(_string) (\
+        (OBJECT_IS_EMPTY(_string) || NO == [_string isKindOfClass:[NSString class]]) ? \
+        @"" : [_string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] \
+        )
+// random int [from,to]
+#define RANDOM_INT(from,to)             ((int)((from) + arc4random() % ((to)-(from) + 1)))
+#define VIEW_IN_XIB(x, i)               [[[NSBundle mainBundle] loadNibNamed:(x) owner:nil options:nil] objectAtIndex:(i)]
+#define FIRST_VIEW_IN_XIB(x)            VIEW_IN_XIB(x, 0)
+// create view controller
+#define CREATE_VIEW_CONTROLLER(x)              [[NSClassFromString(x) alloc] initWithNibName:x bundle:nil]
+#define CREATE_NAVIGATION_VIEW_CONTROLLER(x)   [[UINavigationController alloc]initWithRootViewController:CREATE_VIEW_CONTROLLER(x)]
+
+
+
+/**
+ *  app version
+ */
+#define APP_SHORT_VERSION               [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleShortVersionString"]
+#define APP_BUNDLE_VERSION              [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleVersion"]
+#define APP_VERSION                     [NSString stringWithFormat:@"%@ (%@)", APP_SHORT_VERSION, APP_BUNDLE_VERSION]
+#define APP_BUNDLE_IDENTIFIER           [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleIdentifier"]
+/**
+ * 1. if (NSOrderedAscending != COMPARE_VERSION(v1,v2))  { //v1 >= v2 }
+ * 2. if (NSOrderedDescending == COMPARE_VERSION(v1,v2)) { //v1 > v2 }
+ * 3. if (NSOrderedAscending == COMPARE_VERSION(v1,v2))  { //v1 < v2 }
+ */
+#define COMPARE_VERSION(v1,v2)          [v1 compare:v2 options:NSNumericSearch]
+#define COMPARE_CURRENT_VERSION(v)      COMPARE_VERSION(APP_SHORT_VERSION,v)
+
+
+
+/**
+ *  register & post notification
+ */
+//add
+#define ADD_OBSERVER_WITH_OBJECT(_selector, _name, _object) \
+([[NSNotificationCenter defaultCenter] addObserver:self selector:_selector name:_name object:_object])
+#define ADD_OBSERVER(_selector,_name) \
+ADD_OBSERVER_WITH_OBJECT(_selector, _name, nil)
+//post
+#define POST_NOTIFICATION_WITH_OBJECT_AND_INFO(_name, _object, _info) \
+        ([[NSNotificationCenter defaultCenter] postNotificationName:_name object:_object userInfo:(_info)])
+#define POST_NOTIFICATION(_name) \
+        POST_NOTIFICATION_WITH_OBJECT_AND_INFO(_name, nil, nil)
+#define POST_NOTIFICATION_WITH_OBJECT(_name, _object) \
+        POST_NOTIFICATION_WITH_OBJECT_AND_INFO(_name, _object, nil)
+#define POST_NOTIFICATION_WITH_INFO(_name, _info) \
+        POST_NOTIFICATION_WITH_OBJECT_AND_INFO(_name, nil, _info)
+//remove
+#define REMOVE_OBSERVER(_name) \
+        ([[NSNotificationCenter defaultCenter] removeObserver:self name:_name object:nil])
+#define REMOVE_ALL_OBSERVERS(_self) \
+        ([[NSNotificationCenter defaultCenter] removeObserver:_self])
+
+
+/**
+ * usage:
+ *   @interface NSObject (MyAdd)
+ *       @property (nonatomic, assign) BOOL isError;
+ *   @end
+ *
+ *   #import <objc/runtime.h>
+ *   @implementation NSObject (MyAdd)
+ *       DYNAMIC_PROPERTY_BOOL(isError, setIsError)
+ *   @end
+ */
+#ifndef DYNAMIC_PROPERTY_BOOL
+    #define DYNAMIC_PROPERTY_BOOL(_getter_, _setter_) \
+            - (void)_setter_ : (BOOL)value { \
+                NSNumber *number = [NSNumber numberWithBool:value]; \
+                [self willChangeValueForKey:@#_getter_]; \
+                objc_setAssociatedObject(self, _cmd, number, OBJC_ASSOCIATION_RETAIN); \
+                [self didChangeValueForKey:@#_getter_]; \
+            } \
+            - (BOOL)_getter_ { \
+                NSNumber *number = objc_getAssociatedObject(self, @selector(_setter_:)); \
+                return [number boolValue]; \
+            }
+#endif
+
+/**
+ * usage:
+ *   @interface NSObject (MyAdd)
+ *       @property (nonatomic, retain) UIColor *myColor;
+ *   @end
+ *
+ *   #import <objc/runtime.h>
+ *   @implementation NSObject (MyAdd)
+ *       DYNAMIC_PROPERTY_OBJECT(myColor, setMyColor, UIColor *)
+ *   @end
+ */
+#ifndef DYNAMIC_PROPERTY_OBJECT
+    #define DYNAMIC_PROPERTY_OBJECT(_getter_, _setter_, _type_) \
+            - (void)_setter_ : (_type_)object { \
+                [self willChangeValueForKey:@#_getter_]; \
+                objc_setAssociatedObject(self, _cmd, object, OBJC_ASSOCIATION_RETAIN); \
+                [self didChangeValueForKey:@#_getter_]; \
+            } \
+            - (_type_)_getter_ { \
+                return objc_getAssociatedObject(self, @selector(_setter_:)); \
+            }
+#endif
+
+
+/**
+ * usage:
+ *   @interface NSObject (MyAdd)
+ *       @property (nonatomic, retain) CGPoint myPoint;
+ *   @end
+ *
+ *   #import <objc/runtime.h>
+ *   @implementation NSObject (MyAdd)
+ *       DYNAMIC_PROPERTY_CTYPE(myPoint, setMyPoint, CGPoint)
+ *   @end
+ */
+#ifndef DYNAMIC_PROPERTY_CTYPE
+    #define DYNAMIC_PROPERTY_CTYPE(_getter_, _setter_, _type_) \
+            - (void)_setter_ : (_type_)object { \
+                [self willChangeValueForKey:@#_getter_]; \
+                NSValue *value = [NSValue value:&object withObjCType:@encode(_type_)]; \
+                objc_setAssociatedObject(self, _cmd, value, OBJC_ASSOCIATION_RETAIN); \
+                [self didChangeValueForKey:@#_getter_]; \
+            } \
+            - (_type_)_getter_ { \
+                _type_ cValue = { 0 }; \
+                NSValue *value = objc_getAssociatedObject(self, @selector(_setter_:)); \
+                [value getValue:&cValue]; \
+                return cValue; \
+            }
+#endif
+
+
+
+/**
+ * usage:
+ *      @weakify(self)
+ *      [self doSomething^{
+ *          @strongify(self)
+ *          if (!self) return;
+ *          ...
+ *      }];
+ */
+#ifndef weakify
+    #if DEBUG
+        #if __has_feature(objc_arc)
+            #define weakify(object) autoreleasepool{} __weak __typeof__(object) weak##_##object = object;
+        #else
+            #define weakify(object) autoreleasepool{} __block __typeof__(object) block##_##object = object;
+        #endif
+    #else
+        #if __has_feature(objc_arc)
+            #define weakify(object) try{} @finally{} {} __weak __typeof__(object) weak##_##object = object;
+        #else
+            #define weakify(object) try{} @finally{} {} __block __typeof__(object) block##_##object = object;
+        #endif
+    #endif
+#endif
+
+#ifndef strongify
+    #if DEBUG
+        #if __has_feature(objc_arc)
+            #define strongify(object) autoreleasepool{} __typeof__(object) object = weak##_##object;
+        #else
+            #define strongify(object) autoreleasepool{} __typeof__(object) object = block##_##object;
+        #endif
+    #else
+        #if __has_feature(objc_arc)
+            #define strongify(object) try{} @finally{} __typeof__(object) object = weak##_##object;
+        #else
+            #define strongify(object) try{} @finally{} __typeof__(object) object = block##_##object;
+        #endif
+    #endif
+#endif
+
+
+
