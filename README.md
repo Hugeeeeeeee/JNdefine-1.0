@@ -1,7 +1,7 @@
 # JNdefine 1.0 史上最全宏定义 中英双语 iOS definition DEFINE
 
 #If you like it, please star it. If u dont like please tell us.
-#如果喜欢或者帮助了您，请点星星，有建议也请知无不言，star it，谢谢。感谢支持，iOS开发爱好者Q群欢迎您加入，一起探讨一起学习：203300216
+#如果喜欢或者帮助了您，请点星星，有建议也请知无不言，STAR it please，感谢支持
 
 //----------------------INSTALLATION 安装方法----------------------------
 
